@@ -1,0 +1,10 @@
+{
+    "server": "",
+    "server_port": 443,
+    "local_port": 1080,
+    "password": "",
+    "timeout": 60,
+    "nameserver": "1.1.1.1",
+    "method": "chacha20-ietf-poly1305",
+    "fast_open": true
+}

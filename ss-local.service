@@ -1,0 +1,9 @@
+[Unit]
+Description=Daemon to start Shadowsocks Client
+Wants=network-online.target
+After=network.target
+[Service]
+Type=simple
+ExecStart=/usr/bin/ss-local -c /etc/shadowsocks-libev/config.json
+[Install]
+WantedBy=multi-user.target
