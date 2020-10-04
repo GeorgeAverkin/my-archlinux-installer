@@ -1,0 +1,18 @@
+[package]
+authors = ["usremane <nrg3125@gmail.com>"]
+edition = "2018"
+name = "rust-archlinux-installer"
+version = "0.1.0"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = "2.33.3"
+gptman = "0.7.0"
+serde = {version = "1.0.116", features = ["derive"]}
+toml = "0.5.6"
+uuid = {version = "0.8.1", features = ["v4"]}
+
+[[bin]]
+name = "start"
+path = "src/main.rs"

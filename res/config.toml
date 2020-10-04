@@ -1,0 +1,107 @@
+[drive]
+bootloader_id = "archlinux" 
+crypt_mapping = "cryptroot" 
+device = "" # vdX, sdX, nvmeX, etc...
+encryption = true 
+fs = "ext4" 
+password = "" 
+
+[system]
+arch_host = "" 
+arch_username = "" 
+arch_userpass = "" 
+aur_helper = "yay" 
+mirror_protocol = "https" 
+multilib = true 
+timezone = "" # Europe/Moscow, etc...
+
+[shadowsocks]
+password = ""
+server = ""
+
+[lvm]
+enabled = false
+lvm_home_size = 0
+lvm_root_size = 0
+vg_name = "vgDefault"
+
+[live_cd]
+installer_location = "."
+profile = "releng"
+
+[packages]
+archiso = [
+  "gdm",
+  "gnome-control-center",
+  "gnome-terminal",
+  "gnome-backgrounds", # wallpapers
+  "networkmanager", # gui for gnome
+  "gedit",
+  "code",
+  "eog", # image viewer
+  "firefox",
+  "ffmpegthumbnailer",
+  "git",
+  "pacman-contrib", # rankmirrors
+]
+aur = [
+  "skypeforlinux-stable-bin",
+  "telegram-desktop-bin",
+]
+pacman = [
+  # minimal installation
+  "base",
+  "linux",
+  "linux-firmware",
+  "grub",
+  "dhcpcd",
+  "zsh",
+  "sudo", # optional packages
+  "git",
+  "anki",
+  "archiso",
+  "code",
+  "eog", # image viewer
+  "ffmpegthumbnailer",
+  "file-roller",
+  "firefox",
+  "gdm",
+  "gimp",
+  "gnome-control-center",
+  "gnome-software-packagekit-plugin", # pacman integration
+  "gnome-terminal",
+  "gnome-tweaks",
+  "gvfs-google",
+  "htop",
+  "libreoffice-fresh",
+  "man",
+  "nautilus",
+  "neofetch",
+  "neovim",
+  "networkmanager", # gui for gnome network
+  "openssh", # ssh command
+  "rsync", # copy with exclusion
+  "shadowsocks-libev",
+  "sshfs",
+  "transmission-gtk",
+  "virt-manager",
+  "vlc",
+  "xdg-user-dirs-gtk", # Additional directories for users
+]
+vscode = [
+  # extensions
+  "humao.rest-client", # do requests in .http files
+  "oderwat.indent-rainbow", # customization
+  "coenraads.bracket-pair-colorizer", # customization
+  "eamodio.gitlens", # git
+  "ms-python.python", # python
+  "bungcip.better-toml", # toml
+  "rust-lang.rust", # rust
+  "serayuzgur.crates", # rust
+  "alexcvzz.vscode-sqlite", # sqlite
+  "coolbear.systemd-unit-file", # systemd
+  "esbenp.prettier-vscode", # formatter
+  # themes
+  # kesmarag.vscode-precision-theme
+  "robbowen.synthwave-vscode",
+]
