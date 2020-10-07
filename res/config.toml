@@ -86,7 +86,8 @@ pacman = [
   "transmission-gtk",
   "virt-manager",
   "vlc",
-  "xdg-user-dirs-gtk", # Additional directories for users
+  "xdg-user-dirs-gtk", # additional directories for users
+  "noto-fonts-emoji", # used by "serayuzgur.crates"
 ]
 vscode = [
   # extensions
