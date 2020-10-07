@@ -1,3 +1,5 @@
-.vscode
+/.env
+/.vscode
 /build
 /target
+/res_overrides

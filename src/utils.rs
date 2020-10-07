@@ -1,12 +1,14 @@
+use crate::errors::SudoRequiredError;
+
 use {
-    crate::errors::{ALIError, ALIResult, ErrorKind},
+    crate::errors::ALIResult,
     std::{
         env::{current_exe, var},
         fmt,
         fs::File,
         io::{prelude::*, stdin},
         path::{Path, PathBuf},
-        process::{Command, Stdio},
+        process::Command,
     },
 };
 
@@ -75,7 +77,7 @@ pub fn check_su() -> ALIResult<()> {
             return Ok(());
         }
     }
-    Err(ALIError::new(ErrorKind::SudoRequired))
+    Err(SudoRequiredError {}.into())
 }
 
 pub fn exe_dir() -> PathBuf {
@@ -157,84 +159,5 @@ impl fmt::Display for Mounted {
             buffer = format!("{}\n{}", buffer, partition);
         }
         write!(f, "{}", buffer)
-    }
-}
-
-#[derive(Debug)]
-pub struct Partitions {
-    drive: PathBuf,
-    efi: Option<PathBuf>,
-    boot: Option<PathBuf>,
-    root: Option<PathBuf>,
-}
-
-impl Partitions {
-    pub fn new(drive: PathBuf) -> Self {
-        let mut partitions = Partitions {
-            efi: None,
-            boot: None,
-            root: None,
-            drive,
-        };
-        partitions.update();
-        partitions
-    }
-
-    pub fn update(&mut self) {
-        let mut buffer = String::new();
-
-        let mut lsblk = Command::new("lsblk")
-            .args(&["--output=PATH,PARTLABEL", "--noheadings"])
-            .arg(&self.drive)
-            .stdout(Stdio::piped())
-            .spawn()
-            .unwrap();
-
-        lsblk
-            .stdout
-            .as_mut()
-            .unwrap()
-            .read_to_string(&mut buffer)
-            .unwrap();
-
-        let status = lsblk.wait().unwrap();
-        assert!(status.success());
-
-        let buffer: Vec<(&str, &str)> = buffer
-            .lines()
-            .map(|line| {
-                let mut line = line.splitn(2, ' ');
-                let path = line.next().unwrap();
-                let label = line.next().unwrap().trim();
-                (path, label)
-            })
-            .collect();
-
-        buffer.into_iter().for_each(|(path, label)| {
-            if label == "EFI system partition" {
-                self.efi = Some(PathBuf::from(path));
-                return;
-            }
-            if label == "Arch Linux boot partition" {
-                self.boot = Some(PathBuf::from(path));
-                return;
-            }
-            if label == "Arch Linux root partition" {
-                self.root = Some(PathBuf::from(path));
-                return;
-            }
-        });
-    }
-
-    pub fn efi(&self) -> Option<&PathBuf> {
-        self.efi.as_ref()
-    }
-
-    pub fn boot(&self) -> Option<&PathBuf> {
-        self.boot.as_ref()
-    }
-
-    pub fn root(&self) -> Option<&PathBuf> {
-        self.root.as_ref()
     }
 }

@@ -25,7 +25,26 @@ mod subcommands {
     }
 
     pub fn install() -> App<'static, 'static> {
-        SubCommand::with_name("install").about("Begins install")
+        SubCommand::with_name("install")
+            .about("Begins install")
+            .arg(
+                Arg::with_name("steps")
+                    .long("steps")
+                    .value_name("[step] | [from]..[to]")
+                    .help(
+                        "Specifies installation step to run
+Values:
+    partition
+    encrypt
+    format
+    mount
+    mirrors
+    multilib
+    pacstrap
+    fstab
+    chroot",
+                    ),
+            )
     }
 
     pub fn chroot_install() -> App<'static, 'static> {
@@ -51,7 +70,7 @@ fn run(matches: &ArgMatches, conf_path: &mut PathBuf) -> ALIResult<()> {
         live_cd::main(&config()?)?;
     }
     if matches.is_present("install") {
-        install::main(&config()?)?;
+        install::main(&mut config()?)?;
     }
     if matches.is_present("chroot-install") {
         chroot_install::main(&config()?)?;

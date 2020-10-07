@@ -1,10 +1,15 @@
 [drive]
 bootloader_id = "archlinux" 
 crypt_mapping = "cryptroot" 
-device = "" # vdX, sdX, nvmeX, etc...
+device = "" # vdX, sdX, nvmeXnY, etc...
 encryption = true 
 fs = "ext4" 
 password = "" 
+
+[partitions] # nvmeXnYpZ
+boot = ""
+efi = ""
+root = ""
 
 [system]
 arch_host = "" 
@@ -18,12 +23,6 @@ timezone = "" # Europe/Moscow, etc...
 [shadowsocks]
 password = ""
 server = ""
-
-[lvm]
-enabled = false
-lvm_home_size = 0
-lvm_root_size = 0
-vg_name = "vgDefault"
 
 [live_cd]
 installer_location = "."
@@ -86,7 +85,8 @@ pacman = [
   "transmission-gtk",
   "virt-manager",
   "vlc",
-  "xdg-user-dirs-gtk", # Additional directories for users
+  "xdg-user-dirs-gtk", # additional directories for users
+  "noto-fonts-emoji", # used by "serayuzgur.crates"
 ]
 vscode = [
   # extensions

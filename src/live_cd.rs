@@ -1,9 +1,7 @@
+use crate::errors::{InvalidUmaskError, UnknownArchISOProfileError};
+
 use {
-    crate::{
-        config::Config,
-        errors::{ALIError, ALIResult, ErrorKind},
-        utils::check_su,
-    },
+    crate::{config::Config, errors::ALIResult, utils::check_su},
     std::{
         env::var,
         fs::{self, create_dir_all, read_dir, File},
@@ -86,10 +84,11 @@ impl<'a> LiveCreator<'a> {
         if mode == required_mode {
             Ok(self)
         } else {
-            Err(ALIError::new(ErrorKind::InvalidUmask {
+            Err(InvalidUmaskError {
                 expected: required_mode,
                 got: mode,
-            }))
+            }
+            .into())
         }
     }
 
@@ -136,8 +135,9 @@ impl<'a> LiveCreator<'a> {
     }
 
     fn build(&mut self) -> &mut Self {
-        let mut program = self.profile_root.clone();
-        program.push("build.sh");
+        let program = "mkarchiso";
+        let profile_dir = self.profile_root.clone();
+        let profile_dir = profile_dir.to_str().unwrap();
 
         let mut work_dir = self.profile_root.clone();
         work_dir.push("work");
@@ -147,12 +147,15 @@ impl<'a> LiveCreator<'a> {
         out_dir.push("out");
         let out_dir = out_dir.to_str().unwrap();
 
-        Command::new(&program)
-            .args(&["-v", "-w", work_dir, "-o", out_dir])
-            .spawn()
-            .unwrap()
-            .wait()
-            .unwrap();
+        let args = &["-v", "-w", work_dir, "-o", out_dir, profile_dir];
+
+        let maybe_execution = Command::new(&program).args(args).spawn();
+
+        if let Err(e) = maybe_execution {
+            let msg = format!("command {:?} {:?}: {}", program, args, e);
+            panic!("{}", msg);
+        }
+        maybe_execution.unwrap().wait().unwrap();
         self
     }
 
@@ -198,8 +201,21 @@ pub fn main(config: &Config) -> ALIResult<()> {
     check_su()?;
     let profile_name = config.live_cd().profile();
 
-    let profile =
-        Profile::from_str(&profile_name).ok_or(ALIError::new(ErrorKind::UnknownArchISOProfile))?;
+    let profile = match Profile::from_str(&profile_name) {
+        Some(profile) => profile,
+        _ => {
+            return Err(UnknownArchISOProfileError {
+                profile: profile_name.to_owned(),
+            }
+            .into())
+        }
+    };
+
+    // let profile = Profile::from_str(&profile_name)
+    //     .ok_or(UnknownArchISOProfileError {
+    //         profile: profile_name.to_owned(),
+    //     })
+    //     .map_err(|err| err.into())?;
 
     LiveCreator::new(profile, config)
         .create_working_dir()

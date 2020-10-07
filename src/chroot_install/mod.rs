@@ -7,7 +7,7 @@ mod private {
         super::package_configurator::PackageConfigurator,
         crate::{
             config::Config,
-            utils::{pacman_install, su_command, sudo_passwd_off, sudo_passwd_on, Partitions},
+            utils::{pacman_install, su_command, sudo_passwd_off, sudo_passwd_on},
         },
         std::{
             env::{current_dir, set_current_dir},
@@ -32,8 +32,7 @@ mod private {
 
         fn get_uuid(&self) -> String {
             let mut buffer = String::new();
-            let drive = self.config.drive().device_path();
-            let partitions = Partitions::new(drive);
+            let partitions = &self.config.partitions;
 
             let mut lsblk = Command::new("lsblk")
                 .args(&["-dno", "UUID"])
@@ -55,9 +54,6 @@ mod private {
         }
 
         fn grub_cmdline(&self, uuid: &str) -> String {
-            if self.config.lvm().enabled() {
-                panic!();
-            }
             if self.config.drive().encryption() {
                 let mapping = self.config.drive().crypt_mapping();
 
@@ -68,19 +64,6 @@ mod private {
             } else {
                 "loglevel=3 quiet".to_owned()
             }
-            // if [[ $USE_LVM == true && $ENCRYPT_DISK == true ]]; then
-            //   return
-            // fi
-            // if [[ $USE_LVM == true ]]; then
-            //   # TODO
-            //   return
-            // fi
-            // if [[ $ENCRYPT_DISK == true ]]; then
-            //   # TODO
-            //   return
-            // fi
-            // echo "loglevel=3 quiet"
-            // cmdline
         }
 
         pub fn install_locales(&mut self) -> &mut Self {
@@ -198,11 +181,6 @@ mod private {
 
             if self.config.drive().encryption() {
                 hooks_target.push("encrypt");
-            }
-            if self.config.lvm().enabled() {
-                // TODO: add lvm support
-                //   persist pacman -S --noconfirm --needed lvm2
-                hooks_target.push("lvm2");
             }
             hooks_target.push("filesystems");
             hooks_target.push("fsck");
