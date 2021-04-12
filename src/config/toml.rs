@@ -172,6 +172,7 @@ pub struct Packages {
     archiso: Vec<String>,
     aur: Vec<String>,
     pacman: Vec<String>,
+    pacman_system: Vec<String>,
     vscode: Vec<String>,
 }
 
@@ -186,6 +187,10 @@ impl Packages {
 
     pub fn pacman(&self) -> Vec<&str> {
         self.pacman.iter().map(|pkg| &**pkg).collect()
+    }
+
+    pub fn pacman_system(&self) -> Vec<&str> {
+        self.pacman_system.iter().map(|pkg| &**pkg).collect()
     }
 
     pub fn vscode(&self) -> Vec<&str> {

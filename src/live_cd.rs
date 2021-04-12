@@ -1,14 +1,13 @@
 use crate::errors::{InvalidUmaskError, UnknownArchISOProfileError};
 
 use {
-    crate::{config::Config, errors::ALIResult, utils::check_su},
+    crate::{config::Config, errors::ALIResult, utils::check_su, utils::command::Command},
     std::{
         env::var,
         fs::{self, create_dir_all, read_dir, File},
         io::prelude::*,
         os::unix::fs::PermissionsExt,
         path::PathBuf,
-        process::Command,
     },
 };
 

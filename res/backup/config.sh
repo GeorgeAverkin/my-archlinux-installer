@@ -1,0 +1,16 @@
+#!/bin/sh
+EXCLUDED_PATHS=(
+    /dev
+    /efi
+    /home
+    /lost+found
+    /mnt
+    /opt
+    /proc
+    /root
+    /run
+    /srv
+    /sys
+    /tmp
+    /var
+)

@@ -1,7 +1,8 @@
 use {
     clap::{App, AppSettings, Arg, ArgMatches},
     rust_archlinux_installer::{
-        chroot_install, config::Config, errors::ALIResult, install, live_cd, utils::exe_dir,
+        chroot_install, config::Config, errors::ALIResult, install, live_cd, log::init_logger,
+        utils::exe_dir,
     },
     std::{fs::File, io::prelude::*, path::PathBuf, process::exit},
 };
@@ -58,7 +59,7 @@ fn get_subcommands() -> Vec<App<'static, 'static>> {
 }
 
 fn run(matches: &ArgMatches, conf_path: &mut PathBuf) -> ALIResult<()> {
-    let mut config = || Config::new(conf_path, matches);
+    init_logger();
 
     if matches.is_present("mkconfig") {
         let mut file = File::create("config.toml").unwrap();
@@ -66,14 +67,18 @@ fn run(matches: &ArgMatches, conf_path: &mut PathBuf) -> ALIResult<()> {
         file.write_all(include_bytes!("../res/config.toml"))
             .unwrap();
     }
+    let mut config = Config::new(conf_path, matches)?;
+
     if matches.is_present("archiso") {
-        live_cd::main(&config()?)?;
+        return live_cd::main(&config);
     }
+    config.validate()?;
+
     if matches.is_present("install") {
-        install::main(&mut config()?)?;
+        return install::main(&mut config);
     }
     if matches.is_present("chroot-install") {
-        chroot_install::main(&config()?)?;
+        return chroot_install::main(&config);
     }
     Ok(())
 }

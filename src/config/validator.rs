@@ -17,7 +17,7 @@ impl ConfigValidator {
         Ok(())
     }
 
-    fn validate_drive(&self) -> ALIResult<()> {
+    pub fn validate_drive(&self) -> ALIResult<()> {
         if self.toml.drive.device().is_empty() {
             return Err(ConfigInvalidError {
                 desc: "drive device not set".to_owned(),
@@ -33,7 +33,7 @@ impl ConfigValidator {
         Ok(())
     }
 
-    fn validate_system(&self) -> ALIResult<()> {
+    pub fn validate_system(&self) -> ALIResult<()> {
         if self.toml.system.arch_host().is_empty() {
             return Err(ConfigInvalidError {
                 desc: "hostname not set".to_owned(),

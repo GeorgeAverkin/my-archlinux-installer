@@ -7,14 +7,14 @@ use {
     crate::{
         config::Config,
         errors::ALIResult,
-        utils::{answer, exe_dir, Mounted},
+        utils::{answer, command::Command, exe_dir, Mounted},
     },
     gptman::GPT,
     std::{
         fs::{self, create_dir, File},
         io::{prelude::*, stdin},
         path::{Path, PathBuf},
-        process::{Command, Stdio},
+        process::Stdio,
     },
 };
 
@@ -372,7 +372,7 @@ impl Installer<'_> {
         self.config.partitions.update();
 
         // Crutch: make sure partitions are found.
-        assert!(self.config.partitions.efi().is_some(), self.efi);
+        assert!(self.config.partitions.efi().is_some() == self.efi);
         assert!(self.config.partitions.boot().is_some());
         assert!(self.config.partitions.root().is_some());
 
@@ -489,7 +489,7 @@ impl Installer<'_> {
     }
 
     pub fn pacstrap(&mut self) -> &mut Self {
-        let packages = self.config.packages().pacman();
+        let packages = self.config.packages().pacman_system();
 
         let status = Command::new("pacstrap")
             .arg("/mnt")

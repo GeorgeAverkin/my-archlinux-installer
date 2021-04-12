@@ -129,8 +129,6 @@ impl Config {
     pub fn new(path: &mut PathBuf, cli: &ArgMatches) -> ALIResult<Config> {
         let toml: toml::Toml = toml::Toml::new(path)?;
         let toml = Rc::new(toml);
-        // TODO: use validator after generated Config
-        validator::ConfigValidator::new(toml.clone()).validate()?;
         let (install_from, install_to) = Config::set_install_steps(cli);
         let live_cd = LiveCD::new(toml.clone(), cli);
 
@@ -196,6 +194,11 @@ impl Config {
             step => Config::parse_install_steps(step),
         };
         (from, to)
+    }
+
+    pub fn validate(&self) -> ALIResult<()> {
+        validator::ConfigValidator::new(self.toml.clone()).validate()?;
+        Ok(())
     }
 
     pub fn drive(&self) -> &toml::Drive {

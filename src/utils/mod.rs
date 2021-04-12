@@ -1,4 +1,4 @@
-use crate::errors::SudoRequiredError;
+use crate::errors::{CommandExecutionError, SudoRequiredError};
 
 use {
     crate::errors::ALIResult,
@@ -8,9 +8,12 @@ use {
         fs::File,
         io::{prelude::*, stdin},
         path::{Path, PathBuf},
-        process::Command,
     },
 };
+
+pub mod command;
+
+use command::Command;
 
 pub fn sudo_passwd_off(user: &str) {
     let mut buffer = String::new();
@@ -101,6 +104,34 @@ pub fn answer<P: AsRef<str>>(question: P) -> bool {
             return false;
         }
         println!("Please, answer [y/n].");
+    }
+}
+
+pub fn git_clone<P: AsRef<Path>>(repo: &str, dir: P) -> ALIResult<()> {
+    let status = Command::new("git")
+        .args(&["clone", repo])
+        .arg(dir.as_ref())
+        .spawn()?
+        .wait()?;
+
+    if status.success() {
+        return Err(CommandExecutionError(format!("git clone {} {:?}", repo, dir.as_ref())).into());
+    }
+    Ok(())
+}
+
+pub struct Service<'a>(pub &'a str);
+
+impl<'a> Service<'a> {
+    pub fn enable(self) {
+        let status = Command::new("systemctl")
+            .args(&["enable", self.0])
+            .spawn()
+            .unwrap()
+            .wait()
+            .unwrap();
+
+        assert!(status.success());
     }
 }
 

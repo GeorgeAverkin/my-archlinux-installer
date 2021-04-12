@@ -1,7 +1,6 @@
-use std::{
-    io::Read,
-    path::PathBuf,
-    process::{Command, Stdio},
+use {
+    crate::utils::command::Command,
+    std::{io::Read, path::PathBuf, process::Stdio},
 };
 
 #[derive(Debug)]

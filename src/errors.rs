@@ -98,3 +98,14 @@ impl fmt::Display for DeviceNotFoundError {
 }
 
 impl std::error::Error for DeviceNotFoundError {}
+
+#[derive(Debug)]
+pub struct CommandExecutionError(pub String);
+
+impl fmt::Display for CommandExecutionError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Command \"{}\" failed", self.0)
+    }
+}
+
+impl std::error::Error for CommandExecutionError {}

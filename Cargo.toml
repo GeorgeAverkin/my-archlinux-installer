@@ -10,6 +10,8 @@ version = "0.1.0"
 anyhow = "1.0.38"
 clap = "2.33.3"
 gptman = "0.7.0"
+log = "0.4.14"
+log4rs = "1.0.0"
 serde = {version = "1.0.119", features = ["derive"]}
 toml = "0.5.8"
 uuid = {version = "0.8.2", features = ["v4"]}

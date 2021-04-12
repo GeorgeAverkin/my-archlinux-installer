@@ -43,56 +43,64 @@ archiso = [
   "git",
   "pacman-contrib", # rankmirrors
 ]
-aur = [
-  "skypeforlinux-stable-bin",
-  "telegram-desktop-bin",
+aur = []
+flatpak = [
+  "com.skype.Client",
+  "com.valvesoftware.Steam",
+  "net.ankiweb.Anki",
+  "org.chromium.Chromium",
+  "org.deluge_torrent.deluge",
+  "org.filezillaproject.Filezilla",
+  "org.gimp.GIMP",
+  "org.gnome.eog", # image viewer
+  "org.gnome.Extensions",
+  "org.gnome.FileRoller", # archive manager
+  "org.kde.dolphin", # file manager
+  "org.libreoffice.LibreOffice",
+  "org.mozilla.firefox",
+  "org.remmina.Remmina", # remote desktop
+  "org.telegram.desktop",
+  "org.videolan.VLC", # video player
 ]
 pacman = [
-  # minimal installation
-  "base",
-  "linux",
-  "linux-firmware",
-  "grub",
-  "dhcpcd",
-  "zsh",
-  "sudo", # optional packages
-  "git",
-  "anki",
   "archiso",
   "code",
-  "eog", # image viewer
   "ffmpegthumbnailer",
-  "file-roller",
-  "firefox",
+  "flatpak",
   "gdm",
-  "gimp",
+  "git",
   "gnome-control-center",
   "gnome-software-packagekit-plugin", # pacman integration
   "gnome-terminal",
   "gnome-tweaks",
   "gvfs-google",
   "htop",
-  "libreoffice-fresh",
   "man",
-  "nautilus",
   "neofetch",
-  "neovim",
   "networkmanager", # gui for gnome network
+  "noto-fonts-emoji", # used by "serayuzgur.crates"
   "openssh", # ssh command
   "rsync", # copy with exclusion
   "shadowsocks-libev",
   "sshfs",
-  "transmission-gtk",
   "virt-manager",
-  "vlc",
   "xdg-user-dirs-gtk", # additional directories for users
-  "noto-fonts-emoji", # used by "serayuzgur.crates"
+  "zsh",
+]
+pacman_system = [
+  "base",
+  "dhcpcd",
+  "grub",
+  "linux-firmware",
+  "linux",
+  "neovim",
+  "sudo",
 ]
 vscode = [
   # extensions
   "humao.rest-client", # do requests in .http files
-  "oderwat.indent-rainbow", # customization
-  "coenraads.bracket-pair-colorizer", # customization
+  "oderwat.indent-rainbow", # colorize indentation
+  "coenraads.bracket-pair-colorizer", # colorize brackets
   "eamodio.gitlens", # git
   "ms-python.python", # python
   "bungcip.better-toml", # toml
@@ -100,7 +108,6 @@ vscode = [
   "serayuzgur.crates", # rust
   "alexcvzz.vscode-sqlite", # sqlite
   "coolbear.systemd-unit-file", # systemd
-  "esbenp.prettier-vscode", # formatter
   # themes
   # kesmarag.vscode-precision-theme
   "robbowen.synthwave-vscode",

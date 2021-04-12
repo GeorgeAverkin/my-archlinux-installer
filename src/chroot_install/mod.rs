@@ -1,4 +1,4 @@
-use crate::{config::Config, errors::ALIResult};
+use crate::{config::Config, errors::ALIResult, stage2_chroot_install};
 
 pub mod package_configurator;
 
@@ -7,15 +7,15 @@ mod private {
         super::package_configurator::PackageConfigurator,
         crate::{
             config::Config,
-            utils::{pacman_install, su_command, sudo_passwd_off, sudo_passwd_on},
+            utils::{command::Command, pacman_install},
         },
+        log::error,
         std::{
-            env::{current_dir, set_current_dir},
             fs::{self, File},
             io::{prelude::*, stdin},
             os::unix::fs::symlink,
             path::Path,
-            process::{Command, Stdio},
+            process::{ExitStatus, Stdio},
         },
     };
 
@@ -92,7 +92,9 @@ mod private {
         }
 
         pub fn set_timezone(&mut self) -> &mut Self {
-            symlink(self.config.system().timezone(), "/etc/localtime").unwrap();
+            if let Err(e) = symlink(self.config.system().timezone(), "/etc/localtime") {
+                error!("{}", e);
+            }
 
             Command::new("timedatectl")
                 .args(&["set-ntp", "true"])
@@ -105,29 +107,34 @@ mod private {
 
         pub fn install_grub(&mut self) -> &mut Self {
             let mut grub = Command::new("grub-install");
+            let status: ExitStatus;
 
             if self.efi {
                 pacman_install(&["efibootmgr"]);
                 let id = format!("--bootloader-id={}", self.config.drive().bootloader_id());
 
-                grub.args(&[
-                    "--target=x86_64-efi",
-                    "--efi-directory=/efi",
-                    "--boot-directory=/boot",
-                    &id,
-                ])
-                .spawn()
-                .unwrap()
-                .wait()
-                .unwrap();
+                status = grub
+                    .args(&[
+                        &id,
+                        "--target=x86_64-efi",
+                        "--efi-directory=/efi",
+                        "--boot-directory=/boot",
+                        "--recheck",
+                    ])
+                    .spawn()
+                    .unwrap()
+                    .wait()
+                    .unwrap();
             } else {
-                grub.arg("--target=i386-pc")
+                status = grub
+                    .arg("--target=i386-pc")
                     .arg(self.config.drive().device_path())
                     .spawn()
                     .unwrap()
                     .wait()
                     .unwrap();
             }
+            assert!(status.success());
             self
         }
 
@@ -253,57 +260,6 @@ mod private {
             PackageConfigurator::new(self.config).run();
             self
         }
-
-        pub fn install_aur_helper(&mut self) -> &mut Self {
-            let helper = self.config.system().aur_helper();
-
-            if helper.is_empty() {
-                return self;
-            }
-            pacman_install(&["base-devel"]);
-            let working_dir = format!("/tmp/{}", helper);
-            let url = format!("https://aur.archlinux.org/{}.git", helper);
-            let user = self.config.system().arch_username();
-
-            su_command(user, "git", &["clone", &url, &working_dir])
-                .spawn()
-                .unwrap()
-                .wait()
-                .unwrap();
-
-            let installer_dir = current_dir().unwrap();
-            set_current_dir(working_dir).unwrap();
-            sudo_passwd_off(user);
-
-            su_command(user, "makepkg", &["-si", "--noconfirm"])
-                .spawn()
-                .unwrap()
-                .wait()
-                .unwrap();
-
-            sudo_passwd_on(user);
-            set_current_dir(installer_dir).unwrap();
-            self
-        }
-
-        pub fn install_aur_packages(&mut self) -> &mut Self {
-            let cmd = self.config.system().aur_helper();
-            let user = self.config.system().arch_username();
-
-            if cmd.is_empty() {
-                return self;
-            }
-            sudo_passwd_off(user);
-            self.config.packages().aur().into_iter().for_each(|pkg| {
-                su_command(user, cmd, &["-S", "--noconfirm", pkg])
-                    .spawn()
-                    .unwrap()
-                    .wait()
-                    .unwrap();
-            });
-            sudo_passwd_on(user);
-            self
-        }
     }
 }
 
@@ -316,8 +272,8 @@ pub fn main(config: &Config) -> ALIResult<()> {
         .configure_grub()
         .set_mkinitcpio_hooks()
         .add_user()
-        .configure_packages()
-        .install_aur_helper()
-        .install_aur_packages();
+        .configure_packages();
+
+    stage2_chroot_install::main(config)?;
     Ok(())
 }
