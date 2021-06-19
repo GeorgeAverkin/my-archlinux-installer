@@ -1,6 +1,6 @@
 use crate::{config::Config, errors::ALIResult};
 
-pub mod stage2_package_configurator;
+pub(crate) mod stage2_package_configurator;
 
 mod private {
     use {
@@ -12,26 +12,26 @@ mod private {
         std::env::{current_dir, set_current_dir},
     };
 
-    pub struct Stage2ChrootInstaller<'a> {
+    pub(crate) struct Stage2ChrootInstaller<'a> {
         config: &'a Config,
     }
 
     impl<'a> Stage2ChrootInstaller<'a> {
-        pub fn new(config: &'a Config) -> Stage2ChrootInstaller {
+        pub(crate) fn new(config: &'a Config) -> Stage2ChrootInstaller {
             Stage2ChrootInstaller { config }
         }
 
-        pub fn install_packages(&mut self) -> &mut Self {
+        pub(crate) fn install_packages(&mut self) -> &mut Self {
             pacman_install(&self.config.packages().pacman());
             self
         }
 
-        pub fn configure_packages(&mut self) -> &mut Self {
+        pub(crate) fn configure_packages(&mut self) -> &mut Self {
             Stage2PackageConfigurator::new(self.config).run();
             self
         }
 
-        pub fn install_aur_helper(&mut self) -> &mut Self {
+        pub(crate) fn install_aur_helper(&mut self) -> &mut Self {
             let helper = self.config.system().aur_helper();
 
             if helper.is_empty() {
@@ -63,7 +63,7 @@ mod private {
             self
         }
 
-        pub fn install_aur_packages(&mut self) -> &mut Self {
+        pub(crate) fn install_aur_packages(&mut self) -> &mut Self {
             let cmd = self.config.system().aur_helper();
             let user = self.config.system().arch_username();
 
@@ -84,7 +84,7 @@ mod private {
     }
 }
 
-pub fn main(config: &Config) -> ALIResult<()> {
+pub(crate) fn main(config: &Config) -> ALIResult<()> {
     private::Stage2ChrootInstaller::new(config)
         .install_packages()
         .configure_packages()

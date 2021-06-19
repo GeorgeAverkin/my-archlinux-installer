@@ -12,12 +12,12 @@ use {
     },
 };
 
-pub struct Stage2PackageConfigurator<'a> {
+pub(crate) struct Stage2PackageConfigurator<'a> {
     config: &'a Config,
 }
 
 impl<'a> Stage2PackageConfigurator<'a> {
-    pub fn new(config: &'a Config) -> Stage2PackageConfigurator {
+    pub(crate) fn new(config: &'a Config) -> Stage2PackageConfigurator {
         Stage2PackageConfigurator { config }
     }
 
@@ -46,7 +46,7 @@ impl<'a> Stage2PackageConfigurator<'a> {
         assert!(status.success());
     }
 
-    pub fn run(&mut self) {
+    pub(crate) fn run(&mut self) {
         let packages = self.config.packages().pacman_system();
 
         if packages.contains(&"zsh") {

@@ -1,24 +1,27 @@
-[drive]
-bootloader_id = "archlinux" 
-crypt_mapping = "cryptroot" 
-device = "" # vdX, sdX, nvmeXnY, etc...
-encryption = true 
-fs = "ext4" 
-password = "" 
+[partitions.efi]
+device = ""                 # vdXY, sdXY, nvmeXnYpZ, etc...
+bootloader_id = "archlinux"
 
-[partitions] # nvmeXnYpZ
-boot = ""
-efi = ""
-root = ""
+[partitions.boot]
+device = "" # vdXY, sdXY, nvmeXnYpZ, etc...
+
+[partitions.root]
+device = ""                 # vdXY, sdXY, nvmeXnYpZ, etc...
+crypt_mapping = "cryptroot"
+encryption = true
+fs = "ext4"
+password = ""
 
 [system]
-arch_host = "" 
-arch_username = "" 
-arch_userpass = "" 
-aur_helper = "yay" 
-mirror_protocol = "https" 
-multilib = true 
-timezone = "" # Europe/Moscow, etc...
+drive = ""                # vdX, sdX, nvmeXnY, etc...
+arch_host = ""
+arch_username = ""
+arch_userpass = ""
+aur_helper = "paru"
+mirror_protocol = "https"
+multilib = true
+timezone = ""             # Europe/Moscow, etc...
+connection_command = []   # command to connect to the network
 
 [shadowsocks]
 password = ""
@@ -33,15 +36,15 @@ archiso = [
   "gdm",
   "gnome-control-center",
   "gnome-terminal",
-  "gnome-backgrounds", # wallpapers
-  "networkmanager", # gui for gnome
+  "gnome-backgrounds",    # wallpapers
+  "networkmanager",       # gui for gnome
   "gedit",
   "code",
-  "eog", # image viewer
+  "eog",                  # image viewer
   "firefox",
   "ffmpegthumbnailer",
   "git",
-  "pacman-contrib", # rankmirrors
+  "pacman-contrib",       # rankmirrors (remove and use builtin reflector?)
 ]
 aur = []
 flatpak = [
@@ -52,19 +55,19 @@ flatpak = [
   "org.deluge_torrent.deluge",
   "org.filezillaproject.Filezilla",
   "org.gimp.GIMP",
-  "org.gnome.eog", # image viewer
+  "org.gnome.eog",                  # image viewer
   "org.gnome.Extensions",
-  "org.gnome.FileRoller", # archive manager
-  "org.kde.dolphin", # file manager
+  "org.gnome.FileRoller",           # archive manager
+  "org.kde.dolphin",                # file manager
   "org.libreoffice.LibreOffice",
   "org.mozilla.firefox",
-  "org.remmina.Remmina", # remote desktop
+  "org.remmina.Remmina",            # remote desktop
   "org.telegram.desktop",
-  "org.videolan.VLC", # video player
+  "org.videolan.VLC",               # video player
 ]
 pacman = [
   "archiso",
-  "code",
+  # "code", remove and use from aur?
   "ffmpegthumbnailer",
   "flatpak",
   "gdm",
@@ -77,14 +80,13 @@ pacman = [
   "htop",
   "man",
   "neofetch",
-  "networkmanager", # gui for gnome network
-  "noto-fonts-emoji", # used by "serayuzgur.crates"
-  "openssh", # ssh command
-  "rsync", # copy with exclusion
+  "networkmanager",                   # gui for gnome network
+  "noto-fonts-emoji",                 # used by "serayuzgur.crates"
+  "openssh",                          # ssh command
   "shadowsocks-libev",
   "sshfs",
   "virt-manager",
-  "xdg-user-dirs-gtk", # additional directories for users
+  "xdg-user-dirs-gtk",                # additional directories for users
   "zsh",
 ]
 pacman_system = [
@@ -98,15 +100,13 @@ pacman_system = [
 ]
 vscode = [
   # extensions
-  "humao.rest-client", # do requests in .http files
-  "oderwat.indent-rainbow", # colorize indentation
-  "coenraads.bracket-pair-colorizer", # colorize brackets
-  "eamodio.gitlens", # git
-  "ms-python.python", # python
-  "bungcip.better-toml", # toml
-  "rust-lang.rust", # rust
-  "serayuzgur.crates", # rust
-  "alexcvzz.vscode-sqlite", # sqlite
+  "humao.rest-client",          # do requests in .http files
+  "eamodio.gitlens",            # git
+  "ms-python.python",           # python
+  "bungcip.better-toml",        # toml
+  "rust-lang.rust",             # rust
+  "serayuzgur.crates",          # rust
+  "alexcvzz.vscode-sqlite",     # sqlite
   "coolbear.systemd-unit-file", # systemd
   # themes
   # kesmarag.vscode-precision-theme

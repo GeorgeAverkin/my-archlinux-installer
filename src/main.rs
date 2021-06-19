@@ -1,39 +1,20 @@
 use {
-    clap::{App, AppSettings, Arg, ArgMatches},
+    clap,
     rust_archlinux_installer::{
-        chroot_install, config::Config, errors::ALIResult, install, live_cd, log::init_logger,
+        chroot_install,
+        config::{Config, InstallStepRange},
+        errors::ALIResult,
+        install, live_cd,
+        log::init_logger,
         utils::exe_dir,
     },
     std::{fs::File, io::prelude::*, path::PathBuf, process::exit},
 };
 
-mod subcommands {
-    use clap::{App, Arg, SubCommand};
+use clap::StructOpt;
+use rust_archlinux_installer::config::InstallStep;
 
-    pub fn config() -> App<'static, 'static> {
-        SubCommand::with_name("mkconfig").about("Emits config template")
-    }
-
-    pub fn live_cd() -> App<'static, 'static> {
-        SubCommand::with_name("archiso")
-            .about("Builds Live-CD")
-            .arg(
-                Arg::with_name("working dir")
-                    .long("working-dir")
-                    .value_name("PATH")
-                    .help("Specifies location of build directory"),
-            )
-    }
-
-    pub fn install() -> App<'static, 'static> {
-        SubCommand::with_name("install")
-            .about("Begins install")
-            .arg(
-                Arg::with_name("steps")
-                    .long("steps")
-                    .value_name("[step] | [from]..[to]")
-                    .help(
-                        "Specifies installation step to run
+const STEPS_HELP: &str = "Specifies installation step to run
 Values:
     partition
     encrypt
@@ -43,72 +24,103 @@ Values:
     multilib
     pacstrap
     fstab
-    chroot",
-                    ),
-            )
-    }
+    chroot";
 
-    pub fn chroot_install() -> App<'static, 'static> {
-        SubCommand::with_name("chroot-install").about("Begins install in chroot environment")
-    }
+#[derive(clap::Parser, Debug)]
+enum Command {
+    #[clap(name = "mkconfig", about = "Emits config template")]
+    MkConfig,
+
+    #[clap(name = "archiso", about = "Builds Live-CD")]
+    ArchISO {
+        #[clap(
+            long,
+            value_name = "PATH",
+            help = "Specifies location of build directory"
+        )]
+        working_dir: PathBuf,
+    },
+
+    #[clap(about = "Begins install")]
+    Install {
+        #[clap(long, default_value = "..", help = STEPS_HELP, value_name = "[step] | [from]..[to]")]
+        steps: InstallStepRange,
+    },
+
+    #[clap(about = "Begins install in chroot environment")]
+    ChrootInstall {},
 }
 
-fn get_subcommands() -> Vec<App<'static, 'static>> {
-    use subcommands::*;
-    vec![config(), live_cd(), install(), chroot_install()]
+#[derive(clap::Parser, Debug)]
+#[clap(
+    name = "Arch Linux installer",
+    about = "Arch Linux installation program, written in Rust.",
+    version = "0.1.0"
+)]
+struct Args {
+    #[clap(subcommand)]
+    command: Command,
+
+    #[clap(
+        short,
+        long,
+        value_name = "FILE",
+        help = "Specifies location of config file"
+    )]
+    config: Option<PathBuf>,
 }
 
-fn run(matches: &ArgMatches, conf_path: &mut PathBuf) -> ALIResult<()> {
+fn run(args: &Args, conf_path: &mut PathBuf) -> ALIResult<()> {
     init_logger();
 
-    if matches.is_present("mkconfig") {
-        let mut file = File::create("config.toml").unwrap();
+    match args.command {
+        // TODO: check steps
+        Command::MkConfig => {
+            let mut file = File::create("config.toml").unwrap();
 
-        file.write_all(include_bytes!("../res/config.toml"))
-            .unwrap();
-    }
-    let mut config = Config::new(conf_path, matches)?;
+            file.write_all(include_bytes!("../res/config.toml"))
+                .unwrap();
+        }
+        Command::ArchISO { ref working_dir } => {
+            let config = Config::new(conf_path, Some(working_dir.clone()))?;
+            live_cd::main(&config)?;
+        }
+        Command::Install { ref steps } => {
+            println!("Partition: {}", steps.contains(&InstallStep::Partition));
+            println!("Encrypt: {}", steps.contains(&InstallStep::Encrypt));
+            println!("Format: {}", steps.contains(&InstallStep::Format));
+            println!("Mount: {}", steps.contains(&InstallStep::Mount));
+            println!("Mirrors: {}", steps.contains(&InstallStep::Mirrors));
+            println!("Multilib: {}", steps.contains(&InstallStep::Multilib));
+            println!("Pacstrap: {}", steps.contains(&InstallStep::Pacstrap));
+            println!("Fstab: {}", steps.contains(&InstallStep::Fstab));
+            println!("Chroot: {}", steps.contains(&InstallStep::Chroot));
 
-    if matches.is_present("archiso") {
-        return live_cd::main(&config);
-    }
-    config.validate()?;
-
-    if matches.is_present("install") {
-        return install::main(&mut config);
-    }
-    if matches.is_present("chroot-install") {
-        return chroot_install::main(&config);
+            let mut config = Config::new(conf_path, None)?;
+            config.validate()?;
+            install::main(&mut config, steps)?;
+        }
+        Command::ChrootInstall {} => {
+            let config = Config::new(conf_path, None)?;
+            config.validate()?;
+            chroot_install::main(&config)?;
+        }
     }
     Ok(())
 }
 
 fn main() {
-    let app = App::new("Arch Linux installer")
-        .about("Arch Linux installation program, written in Rust.")
-        .version("0.0.1")
-        .setting(AppSettings::SubcommandRequiredElseHelp)
-        .subcommands(get_subcommands())
-        .arg(
-            Arg::with_name("config")
-                .long("config")
-                .short("c")
-                .value_name("FILE")
-                .help("Specifies location of config file")
-                .takes_value(true),
-        );
-    let matches = app.get_matches();
+    let args = Args::parse();
 
-    let mut config_path = matches
-        .value_of("config")
-        .map(|location| PathBuf::from(location))
-        .unwrap_or({
+    let mut config_path = match args.config {
+        Some(ref config) => config.clone(),
+        None => {
             let mut exe = exe_dir();
             exe.push("config.toml");
             exe
-        });
-
-    if let Err(e) = run(&matches, &mut config_path) {
+        }
+    };
+    if let Err(e) = run(&args, &mut config_path) {
         eprintln!("{}", e);
         exit(1);
     };

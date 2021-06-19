@@ -1,14 +1,13 @@
+use snafu::ensure;
+
 use crate::{
-    config::InstallStep,
-    errors::{DeviceNotFoundError, NetworkError},
+    config::{Config, InstallStep, InstallStepRange},
+    constants::{EFI_GUID, LINUX_GUID},
+    errors::{self, ALIResult},
+    utils::{answer, command::Command, exe_dir, partitions::Partitions, Mounted},
 };
 
 use {
-    crate::{
-        config::Config,
-        errors::ALIResult,
-        utils::{answer, command::Command, exe_dir, Mounted},
-    },
     gptman::GPT,
     std::{
         fs::{self, create_dir, File},
@@ -37,14 +36,6 @@ fn partition_table_exists(disk: &PathBuf) -> bool {
 
     buffer.contains("Disklabel type: gpt")
 }
-
-const EFI_GUID: [u8; 16] = [
-    40, 115, 42, 193, 31, 248, 210, 17, 186, 75, 0, 160, 201, 62, 201, 59,
-];
-
-const LINUX_GUID: [u8; 16] = [
-    0xAF, 0x3D, 0xC6, 0x0F, 0x83, 0x84, 0x72, 0x47, 0x8E, 0x79, 0x3D, 0x69, 0xD8, 0x47, 0x7D, 0xE4,
-];
 
 fn add_efi_partition(gpt: &mut GPT, part_index: u32) {
     let partition_size = 1024 * 1024 * 64 / gpt.sector_size;
@@ -97,8 +88,10 @@ fn add_root_partition(gpt: &mut GPT, part_index: u32) {
     };
 }
 
-pub struct Installer<'a> {
-    config: &'a mut Config,
+pub(crate) struct Installer<'a, 'b> {
+    config: &'a Config,
+    partitions: Partitions,
+    steps: &'b InstallStepRange,
     efi: bool,
     fs_root: Option<PathBuf>,
     efi_formatted: bool,
@@ -106,16 +99,24 @@ pub struct Installer<'a> {
     // root_formatted: bool,
 }
 
-impl Installer<'_> {
-    pub fn new(config: &mut Config) -> Installer {
+impl<'a, 'b> Installer<'a, 'b> {
+    pub(crate) fn new(config: &'a Config, steps: &'b InstallStepRange) -> Installer<'a, 'b> {
         let efi = Path::new("/sys/firmware/efi").exists();
         let mut fs_root: Option<PathBuf> = None;
 
-        if config.drive().encryption() {
-            fs_root = Some(config.drive().crypt_mapping_path());
+        let partitions = Partitions::new(
+            config.system().drive_path(),
+            &config.partitions().root.device,
+            &config.partitions().boot.device,
+            &config.partitions().efi.device,
+        );
+        if config.partitions().root.encryption {
+            fs_root = Some(config.partitions().root.crypt_mapping_path());
         }
         Installer {
             config,
+            partitions,
+            steps,
             efi,
             fs_root,
             efi_formatted: false,
@@ -127,7 +128,7 @@ impl Installer<'_> {
     fn luks_format(&mut self, password: &str) {
         let mut cryptsetup = Command::new("cryptsetup")
             .args(&["-v", "luksFormat"])
-            .arg(self.config.partitions.root().unwrap())
+            .arg(self.partitions.root().unwrap())
             .stdin(Stdio::piped())
             .spawn()
             .unwrap();
@@ -147,7 +148,7 @@ impl Installer<'_> {
         let mut cryptsetup = Command::new("cryptsetup")
             .stdin(Stdio::piped())
             .arg("open")
-            .arg(self.config.partitions.root().unwrap())
+            .arg(self.partitions.root().unwrap())
             .arg(self.fs_root.as_ref().unwrap().file_name().unwrap())
             .spawn()
             .unwrap();
@@ -166,7 +167,7 @@ impl Installer<'_> {
     fn create_partition_table(&self) {
         println!(
             "WARNING!!! Disk \"{}\" will be wiped. Type \"DO IT\" to continue.",
-            self.config.drive().device(),
+            self.config.system().drive,
         );
         let mut answer = String::new();
         stdin().read_line(&mut answer).unwrap();
@@ -176,7 +177,7 @@ impl Installer<'_> {
             // return Err(ALIError::new(ErrorKind::EarlyExit));
         }
         let mut gdisk = Command::new("gdisk")
-            .arg(&self.config.drive().device_path())
+            .arg(&self.config.system().drive_path())
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
             .spawn()
@@ -205,19 +206,6 @@ impl Installer<'_> {
         assert!(status.success());
     }
 
-    pub fn contains_step(&self, step: InstallStep) -> bool {
-        let from = self.config.install_step_from();
-        let to = self.config.install_step_to();
-
-        if from.is_none() && to.is_none() {
-            return true;
-        }
-        let from = from.map(|step| step as i8).unwrap_or(-1);
-        let to = to.map(|step| step as i8).unwrap_or(127);
-        let step = step as i8;
-        from <= step && step <= to
-    }
-
     fn get_fs_type(&self, partition: &PathBuf) -> String {
         let mut buffer = String::new();
 
@@ -240,8 +228,8 @@ impl Installer<'_> {
         buffer.trim().to_owned()
     }
 
-    pub fn check_partitions_formatted(&mut self) -> &mut Self {
-        let boot_fs_type = self.get_fs_type(self.config.partitions.boot().unwrap());
+    pub(crate) fn check_partitions_formatted(&mut self) -> &mut Self {
+        let boot_fs_type = self.get_fs_type(self.partitions.boot().unwrap());
 
         match boot_fs_type.as_str() {
             "ext4" => self.boot_formatted = true,
@@ -249,7 +237,7 @@ impl Installer<'_> {
             fs_type => panic!("Expected boot fs to be ext4, got: {}", fs_type),
         }
         if self.efi {
-            let efi_fs_type = self.get_fs_type(self.config.partitions.efi().unwrap());
+            let efi_fs_type = self.get_fs_type(self.partitions.efi().unwrap());
 
             match efi_fs_type.as_str() {
                 "vfat" => self.efi_formatted = true,
@@ -260,7 +248,7 @@ impl Installer<'_> {
         self
     }
 
-    pub fn check_network(&mut self) -> ALIResult<&mut Self> {
+    pub(crate) fn network_available(&mut self) -> ALIResult<bool> {
         let status = Command::new("ping")
             .args(&["-c", "1", "archlinux.org"])
             .stdout(Stdio::null())
@@ -269,25 +257,54 @@ impl Installer<'_> {
             .wait()
             .unwrap();
 
-        if !status.success() {
-            return Err(NetworkError {}.into());
-        }
-        Ok(self)
+        let result = status.success();
+        Ok(result)
     }
 
-    pub fn check_drive(&mut self) -> ALIResult<&mut Self> {
-        let drive = self.config.drive().device_path();
+    fn connect_to_network(&self) -> ALIResult<()> {
+        let program = self.config.system().connection_command.get(0).unwrap();
+        let args = &self.config.system().connection_command[1..];
 
-        if !drive.exists() {
-            return Err(DeviceNotFoundError {
-                device: drive.to_string_lossy().into_owned(),
+        if program == "nmcli" {
+            let mut network_manager_active = Command::new("systemctl")
+                .args(&["status", "NetworkManager"])
+                .stdout(Stdio::null())
+                .spawn()
+                .unwrap()
+                .wait()
+                .unwrap()
+                .success();
+
+            if !network_manager_active {
+                network_manager_active = Command::new("systemctl")
+                    .args(&["start", "NetworkManager"])
+                    .stdout(Stdio::null())
+                    .spawn()
+                    .unwrap()
+                    .wait()
+                    .unwrap()
+                    .success();
             }
-            .into());
+            assert!(network_manager_active);
         }
+
+        let status = Command::new(program)
+            .args(args)
+            .spawn()
+            .unwrap()
+            .wait()
+            .unwrap();
+        assert!(status.success());
+        Ok(())
+    }
+
+    pub(crate) fn check_drive(&mut self) -> ALIResult<&mut Self> {
+        let device = self.config.system().drive_path();
+        ensure!(device.exists(), errors::DeviceNotFoundSnafu { device });
         Ok(self)
     }
 
-    pub fn check_mounted(&mut self) -> ALIResult<&mut Self> {
+    pub(crate) fn check_mounted(&mut self) -> ALIResult<&mut Self> {
         let mounted = Mounted::new();
 
         if mounted.find_by_mountpoint("/mnt").is_some() {
@@ -307,9 +324,9 @@ impl Installer<'_> {
         Ok(self)
     }
 
-    pub fn check_luks_open(&mut self) -> ALIResult<&mut Self> {
+    pub(crate) fn check_luks_open(&mut self) -> ALIResult<&mut Self> {
         let mut crypt_mapping_path = PathBuf::from("/dev/mapper");
-        let crypt_mapping = self.config.drive().crypt_mapping();
+        let crypt_mapping = &self.config.partitions().root.crypt_mapping;
         crypt_mapping_path.push(crypt_mapping);
 
         if crypt_mapping_path.exists() {
@@ -332,8 +349,8 @@ impl Installer<'_> {
         Ok(self)
     }
 
-    pub fn partition(&mut self) -> ALIResult<&mut Self> {
-        let drive_path = self.config.drive().device_path();
+    pub(crate) fn partition(&mut self) -> ALIResult<&mut Self> {
+        let drive_path = self.config.system().drive_path();
 
         if !partition_table_exists(&drive_path) {
             self.create_partition_table();
@@ -354,13 +371,13 @@ impl Installer<'_> {
 
         unused_indexes.reverse();
 
-        if self.efi && self.config.partitions.efi().is_none() {
+        if self.efi && self.partitions.efi().is_none() {
             add_efi_partition(&mut gpt, unused_indexes.pop().unwrap());
         }
-        if self.config.partitions.boot().is_none() {
+        if self.partitions.boot().is_none() {
             add_boot_partition(&mut gpt, unused_indexes.pop().unwrap());
         }
-        if self.config.partitions.root().is_none() {
+        if self.partitions.root().is_none() {
             add_root_partition(&mut gpt, unused_indexes.pop().unwrap());
         }
         gpt.write_into(&mut drive).unwrap();
@@ -369,18 +386,22 @@ impl Installer<'_> {
         // Crutch: lsblk doesn't keep up without timeout.
         std::thread::sleep(std::time::Duration::from_secs(1));
 
-        self.config.partitions.update();
+        self.partitions.update();
 
         // Crutch: make sure partitions are found.
-        assert!(self.config.partitions.efi().is_some() == self.efi);
-        assert!(self.config.partitions.boot().is_some());
-        assert!(self.config.partitions.root().is_some());
+        if self.efi {
+            assert!(self.partitions.efi().is_some());
+        } else {
+            assert!(self.partitions.bios_partition_exists());
+        }
+        assert!(self.partitions.boot().is_some());
+        assert!(self.partitions.root().is_some());
 
         Ok(self)
     }
 
-    pub fn encrypt_partition(&mut self) -> &mut Self {
-        let mut password = self.config.drive().password().to_owned();
+    pub(crate) fn encrypt_partition(&mut self) -> &mut Self {
+        let mut password = self.config.partitions().root.password.to_owned();
 
         if password.is_empty() {
             password.truncate(0);
@@ -396,12 +417,12 @@ impl Installer<'_> {
         self
     }
 
-    pub fn format_partitions(&mut self) -> &mut Self {
-        let mkfs = format!("mkfs.{}", self.config.drive().fs());
+    pub(crate) fn format_partitions(&mut self) -> &mut Self {
+        let mkfs = format!("mkfs.{}", self.config.partitions().root.fs);
 
         // TODO: what is the meaning of \^64bit?
         let status = Command::new(&mkfs)
-            .arg(self.config.partitions.boot().unwrap())
+            .arg(self.partitions.boot().unwrap())
             .spawn()
             .unwrap()
             .wait()
@@ -421,7 +442,7 @@ impl Installer<'_> {
         if self.efi && !self.efi_formatted {
             let status = Command::new("mkfs.fat")
                 .arg("-F32")
-                .arg(self.config.partitions.efi().unwrap())
+                .arg(self.partitions.efi().unwrap())
                 .spawn()
                 .unwrap()
                 .wait()
@@ -433,20 +454,20 @@ impl Installer<'_> {
         self
     }
 
-    pub fn mount_partitions(&mut self) -> &mut Self {
+    pub(crate) fn mount_partitions(&mut self) -> &mut Self {
         self.mount(self.fs_root.as_ref().unwrap(), "/mnt");
         create_dir("/mnt/boot").unwrap();
 
-        self.mount(self.config.partitions.boot().unwrap(), "/mnt/boot");
+        self.mount(self.partitions.boot().unwrap(), "/mnt/boot");
 
         if self.efi {
             create_dir("/mnt/efi").unwrap();
-            self.mount(self.config.partitions.efi().unwrap(), "/mnt/efi");
+            self.mount(self.partitions.efi().unwrap(), "/mnt/efi");
         }
         self
     }
 
-    pub fn configure_mirrors(&mut self) -> &mut Self {
+    pub(crate) fn configure_mirrors(&mut self) -> &mut Self {
         if !Path::new("/etc/pacman.d/mirrorlist.backup").exists() {
             fs::rename(
                 "/etc/pacman.d/mirrorlist",
@@ -474,7 +495,7 @@ impl Installer<'_> {
         self
     }
 
-    pub fn enable_multilib(&mut self) -> &mut Self {
+    pub(crate) fn enable_multilib(&mut self) -> &mut Self {
         let mut conf_content = String::new();
         let mut pacman_conf = File::open("/etc/pacman.conf").unwrap();
         pacman_conf.read_to_string(&mut conf_content).unwrap();
@@ -488,7 +509,7 @@ impl Installer<'_> {
         self
     }
 
-    pub fn pacstrap(&mut self) -> &mut Self {
+    pub(crate) fn pacstrap(&mut self) -> &mut Self {
         let packages = self.config.packages().pacman_system();
 
         let status = Command::new("pacstrap")
@@ -503,7 +524,7 @@ impl Installer<'_> {
         self
     }
 
-    pub fn generate_fstab(&mut self) -> &mut Self {
+    pub(crate) fn generate_fstab(&mut self) -> &mut Self {
         let file = fs::OpenOptions::new()
             .append(true)
             .open("/mnt/etc/fstab")
@@ -521,7 +542,7 @@ impl Installer<'_> {
         self
     }
 
-    pub fn chroot(&mut self) {
+    pub(crate) fn chroot(&mut self) {
         let status = Command::new("cp")
             .arg("-rv")
             .arg(exe_dir())
@@ -543,47 +564,48 @@ impl Installer<'_> {
         assert!(status.success());
     }
 
-    pub fn run(&mut self) -> ALIResult<()> {
-        let encryption = self.config.drive().encryption();
+    pub(crate) fn run(&mut self) -> ALIResult<()> {
+        let encryption = self.config.partitions().root.encryption;
         let multilib = self.config.system().multilib();
 
-        self.check_network()?
-            .check_drive()?
-            // .check_mounted()?
-            // .check_luks_open()?
-            ;
+        if !self.network_available()? {
+            self.connect_to_network()?;
+        }
+        self.check_drive()?;
+        // .check_mounted()?
+        // .check_luks_open()?
 
-        if self.contains_step(InstallStep::Partition) {
+        if self.steps.contains(&InstallStep::Partition) {
             self.partition()?;
         }
-        if self.contains_step(InstallStep::Encrypt) && encryption {
+        if self.steps.contains(&InstallStep::Encrypt) && encryption {
             self.encrypt_partition();
         }
-        if self.contains_step(InstallStep::Format) {
+        if self.steps.contains(&InstallStep::Format) {
             self.format_partitions();
         }
-        if self.contains_step(InstallStep::Mount) {
+        if self.steps.contains(&InstallStep::Mount) {
             self.mount_partitions();
         }
-        if self.contains_step(InstallStep::Mirrors) {
+        if self.steps.contains(&InstallStep::Mirrors) {
             self.configure_mirrors();
         }
-        if self.contains_step(InstallStep::Multilib) && multilib {
+        if self.steps.contains(&InstallStep::Multilib) && multilib {
             self.enable_multilib();
         }
-        if self.contains_step(InstallStep::Pacstrap) {
+        if self.steps.contains(&InstallStep::Pacstrap) {
             self.pacstrap();
         }
-        if self.contains_step(InstallStep::Fstab) {
+        if self.steps.contains(&InstallStep::Fstab) {
             self.generate_fstab();
         }
-        if self.contains_step(InstallStep::Chroot) {
+        if self.steps.contains(&InstallStep::Chroot) {
             self.chroot();
         }
         Ok(())
     }
 }
 
-pub fn main(config: &mut Config) -> ALIResult<()> {
-    Installer::new(config).run()
+pub fn main(config: &mut Config, steps: &InstallStepRange) -> ALIResult<()> {
+    Installer::new(config, steps).run()
 }

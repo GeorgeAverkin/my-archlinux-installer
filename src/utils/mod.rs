@@ -1,4 +1,4 @@
-use crate::errors::{CommandExecutionError, SudoRequiredError};
+use crate::errors;
 
 use {
     crate::errors::ALIResult,
@@ -11,11 +11,13 @@ use {
     },
 };
 
-pub mod command;
+pub(crate) mod command;
+pub(crate) mod partitions;
 
 use command::Command;
+use snafu::ensure;
 
-pub fn sudo_passwd_off(user: &str) {
+pub(crate) fn sudo_passwd_off(user: &str) {
     let mut buffer = String::new();
 
     File::open("/etc/sudoers")
@@ -33,7 +35,7 @@ pub fn sudo_passwd_off(user: &str) {
         .unwrap();
 }
 
-pub fn sudo_passwd_on(user: &str) {
+pub(crate) fn sudo_passwd_on(user: &str) {
     let mut buffer = String::new();
 
     File::open("/etc/sudoers")
@@ -51,7 +53,7 @@ pub fn sudo_passwd_on(user: &str) {
         .unwrap();
 }
 
-pub fn su_command(user: &str, command: &str, args: &[&str]) -> Command {
+pub(crate) fn su_command(user: &str, command: &str, args: &[&str]) -> Command {
     let mut eval_cmd = vec![command];
     args.into_iter().for_each(|arg| eval_cmd.push(arg));
     let eval_cmd = eval_cmd.join(" ");
@@ -60,7 +62,10 @@ pub fn su_command(user: &str, command: &str, args: &[&str]) -> Command {
     cmd
 }
 
-pub fn pacman_install(packages: &[&str]) {
+pub(crate) fn pacman_install(packages: &[&str]) {
+    if packages.is_empty() {
+        return;
+    }
     let status = Command::new("pacman")
         .args(&["-S", "--noconfirm", "--needed"])
         .args(packages)
@@ -72,15 +77,14 @@ pub fn pacman_install(packages: &[&str]) {
     assert!(status.success());
 }
 
-pub fn check_su() -> ALIResult<()> {
+pub(crate) fn check_su() -> ALIResult<()> {
     let user = var("USER");
 
-    if let Ok(user) = user {
-        if user == "root" {
-            return Ok(());
-        }
-    }
-    Err(SudoRequiredError {}.into())
+    ensure!(
+        matches!(user, Ok(user) if user == "root"),
+        errors::SudoRequiredSnafu
+    );
+    Ok(())
 }
 
 pub fn exe_dir() -> PathBuf {
@@ -89,7 +93,7 @@ pub fn exe_dir() -> PathBuf {
     path
 }
 
-pub fn answer<P: AsRef<str>>(question: P) -> bool {
+pub(crate) fn answer<P: AsRef<str>>(question: P) -> bool {
     println!("{} [y/n]", question.as_ref());
 
     loop {
@@ -107,23 +111,28 @@ pub fn answer<P: AsRef<str>>(question: P) -> bool {
     }
 }
 
-pub fn git_clone<P: AsRef<Path>>(repo: &str, dir: P) -> ALIResult<()> {
+pub(crate) fn git_clone<P: AsRef<Path>>(repo: &str, dir: P) -> ALIResult<()> {
     let status = Command::new("git")
         .args(&["clone", repo])
         .arg(dir.as_ref())
-        .spawn()?
-        .wait()?;
+        .spawn()
+        .unwrap()
+        .wait()
+        .unwrap();
 
-    if status.success() {
-        return Err(CommandExecutionError(format!("git clone {} {:?}", repo, dir.as_ref())).into());
-    }
+    ensure!(
+        status.success(),
+        errors::CommandExecutionSnafu {
+            message: format!("git clone {} {:?}", repo, dir.as_ref()),
+        }
+    );
     Ok(())
 }
 
-pub struct Service<'a>(pub &'a str);
+pub(crate) struct Service<'a>(pub(crate) &'a str);
 
 impl<'a> Service<'a> {
-    pub fn enable(self) {
+    pub(crate) fn enable(self) {
         let status = Command::new("systemctl")
             .args(&["enable", self.0])
             .spawn()
@@ -136,7 +145,7 @@ impl<'a> Service<'a> {
 }
 
 #[derive(Debug)]
-pub struct FileSystem {
+pub(crate) struct FileSystem {
     spec: String,
     mountpoint: PathBuf,
 }
@@ -149,12 +158,12 @@ impl fmt::Display for FileSystem {
 }
 
 #[derive(Debug)]
-pub struct Mounted {
+pub(crate) struct Mounted {
     file_systems: Vec<FileSystem>,
 }
 
 impl Mounted {
-    pub fn new() -> Mounted {
+    pub(crate) fn new() -> Mounted {
         let mut src_file = File::open("/proc/mounts").unwrap();
         let mut buffer = String::new();
         src_file.read_to_string(&mut buffer).unwrap();
@@ -171,7 +180,7 @@ impl Mounted {
         Mounted { file_systems }
     }
 
-    pub fn find_by_mountpoint<P: AsRef<Path>>(&self, mountpoint: P) -> Option<&FileSystem> {
+    pub(crate) fn find_by_mountpoint<P: AsRef<Path>>(&self, mountpoint: P) -> Option<&FileSystem> {
         let mountpoint = mountpoint.as_ref();
 
         let fs = self.file_systems.iter().find(|fs| {

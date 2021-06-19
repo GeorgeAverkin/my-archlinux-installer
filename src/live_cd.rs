@@ -1,4 +1,6 @@
-use crate::errors::{InvalidUmaskError, UnknownArchISOProfileError};
+use snafu::{ensure, OptionExt};
+
+use crate::errors;
 
 use {
     crate::{config::Config, errors::ALIResult, utils::check_su, utils::command::Command},
@@ -52,7 +54,7 @@ struct LiveCreator<'a> {
 
 impl<'a> LiveCreator<'a> {
     fn new(profile: Profile<'a>, config: &'a Config) -> LiveCreator<'a> {
-        let working_dir = config.live_cd().working_dir().clone();
+        let working_dir = config.live_cd.working_dir().clone();
         let mut installer_target = working_dir.clone();
         installer_target.push(&profile.name());
         installer_target.push("airootfs/root/installer");
@@ -80,15 +82,14 @@ impl<'a> LiveCreator<'a> {
         let mode = metadata.permissions().mode();
         let required_mode = 0o40755;
 
-        if mode == required_mode {
-            Ok(self)
-        } else {
-            Err(InvalidUmaskError {
+        ensure!(
+            mode == required_mode,
+            errors::InvalidUmaskSnafu {
                 expected: required_mode,
                 got: mode,
             }
-            .into())
-        }
+        );
+        Ok(self)
     }
 
     fn copy_archiso_files(&mut self) -> &mut Self {
@@ -198,29 +199,17 @@ impl<'a> LiveCreator<'a> {
 
 pub fn main(config: &Config) -> ALIResult<()> {
     check_su()?;
-    let profile_name = config.live_cd().profile();
+    let profile_name = config.live_cd.profile();
 
-    let profile = match Profile::from_str(&profile_name) {
-        Some(profile) => profile,
-        _ => {
-            return Err(UnknownArchISOProfileError {
-                profile: profile_name.to_owned(),
-            }
-            .into())
-        }
-    };
-
-    // let profile = Profile::from_str(&profile_name)
-    //     .ok_or(UnknownArchISOProfileError {
-    //         profile: profile_name.to_owned(),
-    //     })
-    //     .map_err(|err| err.into())?;
-
+    let profile =
+        Profile::from_str(&profile_name).with_context(|| errors::UnknownArchISOProfileSnafu {
+            profile: profile_name.to_owned(),
+        })?;
     LiveCreator::new(profile, config)
         .create_working_dir()
         .check_umask()?
         .copy_archiso_files()
-        .copy_installer(config.live_cd().installer_location())
+        .copy_installer(config.live_cd.installer_location())
         .add_packages(config.packages().archiso())
         .build()
         .copy_iso()

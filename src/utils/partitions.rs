@@ -1,10 +1,14 @@
+use crate::constants::BIOS_BOOT_GUID;
+
 use {
     crate::utils::command::Command,
+    gptman::GPT,
+    std::fs::File,
     std::{io::Read, path::PathBuf, process::Stdio},
 };
 
 #[derive(Debug)]
-pub struct Partitions {
+pub(crate) struct Partitions {
     drive: PathBuf,
     efi: Option<PathBuf>,
     boot: Option<PathBuf>,
@@ -12,7 +16,7 @@ pub struct Partitions {
 }
 
 impl Partitions {
-    pub fn new(drive: PathBuf, root: &str, boot: &str, efi: &str) -> Self {
+    pub(crate) fn new(drive: PathBuf, root: &str, boot: &str, efi: &str) -> Self {
         let root = Partitions::str_to_path(root);
         let boot = Partitions::str_to_path(boot);
         let efi = Partitions::str_to_path(efi);
@@ -40,7 +44,7 @@ impl Partitions {
         }
     }
 
-    pub fn update(&mut self) {
+    pub(crate) fn update(&mut self) {
         let mut buffer = String::new();
 
         let mut lsblk = Command::new("lsblk")
@@ -86,15 +90,27 @@ impl Partitions {
         });
     }
 
-    pub fn efi(&self) -> Option<&PathBuf> {
+    pub(crate) fn bios_partition_exists(&self) -> bool {
+        let mut file = File::open(&self.drive).unwrap();
+        let gpt = GPT::find_from(&mut file).unwrap();
+
+        for (_, partition) in gpt.iter() {
+            if partition.partition_type_guid == BIOS_BOOT_GUID {
+                return true;
+            }
+        }
+        false
+    }
+
+    pub(crate) fn efi(&self) -> Option<&PathBuf> {
         self.efi.as_ref()
     }
 
-    pub fn boot(&self) -> Option<&PathBuf> {
+    pub(crate) fn boot(&self) -> Option<&PathBuf> {
         self.boot.as_ref()
     }
 
-    pub fn root(&self) -> Option<&PathBuf> {
+    pub(crate) fn root(&self) -> Option<&PathBuf> {
         self.root.as_ref()
     }
 }

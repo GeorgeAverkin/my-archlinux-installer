@@ -3,16 +3,16 @@ use {
     std::{fs, io::prelude::*},
 };
 
-pub struct PackageConfigurator<'a> {
+pub(crate) struct PackageConfigurator<'a> {
     config: &'a Config,
 }
 
 impl<'a> PackageConfigurator<'a> {
-    pub fn new(config: &'a Config) -> PackageConfigurator {
+    pub(crate) fn new(config: &'a Config) -> PackageConfigurator {
         PackageConfigurator { config }
     }
 
-    pub fn run(&mut self) {
+    pub(crate) fn run(&mut self) {
         let packages = self.config.packages().pacman_system();
 
         if packages.contains(&"sudo") {

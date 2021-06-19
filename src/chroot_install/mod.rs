@@ -1,8 +1,10 @@
 use crate::{config::Config, errors::ALIResult, stage2_chroot_install};
 
-pub mod package_configurator;
+pub(crate) mod package_configurator;
 
 mod private {
+    use crate::utils::partitions::Partitions;
+
     use {
         super::package_configurator::PackageConfigurator,
         crate::{
@@ -19,21 +21,26 @@ mod private {
         },
     };
 
-    pub struct ChrootInstaller<'a> {
+    pub(crate) struct ChrootInstaller<'a> {
         config: &'a Config,
         efi: bool,
     }
 
     impl<'a> ChrootInstaller<'a> {
-        pub fn new(config: &'a Config) -> ChrootInstaller {
+        pub(crate) fn new(config: &'a Config) -> ChrootInstaller {
             let efi = Path::new("/sys/firmware/efi").exists();
             ChrootInstaller { config, efi }
         }
 
         fn get_uuid(&self) -> String {
             let mut buffer = String::new();
-            let partitions = &self.config.partitions;
 
+            let partitions = Partitions::new(
+                self.config.system().drive_path(),
+                &self.config.partitions().root.device,
+                &self.config.partitions().boot.device,
+                &self.config.partitions().efi.device,
+            );
             let mut lsblk = Command::new("lsblk")
                 .args(&["-dno", "UUID"])
                 .arg(partitions.root().unwrap())
@@ -54,8 +61,8 @@ mod private {
         }
 
         fn grub_cmdline(&self, uuid: &str) -> String {
-            if self.config.drive().encryption() {
-                let mapping = self.config.drive().crypt_mapping();
+            if self.config.partitions().root.encryption {
+                let mapping = &self.config.partitions().root.crypt_mapping;
 
                 format!(
                     "loglevel=3 quiet cryptdevice=UUID={}:{} root=/dev/mapper/{}",
@@ -66,7 +73,7 @@ mod private {
             }
         }
 
-        pub fn install_locales(&mut self) -> &mut Self {
+        pub(crate) fn install_locales(&mut self) -> &mut Self {
             let mut buffer = String::new();
             let mut locale_gen = File::open("/etc/locale.gen").unwrap();
             locale_gen.read_to_string(&mut buffer).unwrap();
@@ -83,7 +90,7 @@ mod private {
             self
         }
 
-        pub fn set_hostname(&mut self) -> &mut Self {
+        pub(crate) fn set_hostname(&mut self) -> &mut Self {
             File::create("/etc/hostname")
                 .unwrap()
                 .write_all(self.config.system().arch_host().as_bytes())
@@ -91,7 +98,7 @@ mod private {
             self
         }
 
-        pub fn set_timezone(&mut self) -> &mut Self {
+        pub(crate) fn set_timezone(&mut self) -> &mut Self {
             if let Err(e) = symlink(self.config.system().timezone(), "/etc/localtime") {
                 error!("{}", e);
             }
@@ -105,13 +112,16 @@ mod private {
             self
         }
 
-        pub fn install_grub(&mut self) -> &mut Self {
+        pub(crate) fn install_grub(&mut self) -> &mut Self {
             let mut grub = Command::new("grub-install");
             let status: ExitStatus;
 
             if self.efi {
                 pacman_install(&["efibootmgr"]);
-                let id = format!("--bootloader-id={}", self.config.drive().bootloader_id());
+                let id = format!(
+                    "--bootloader-id={}",
+                    self.config.partitions().efi.bootloader_id
+                );
 
                 status = grub
                     .args(&[
@@ -128,7 +138,7 @@ mod private {
             } else {
                 status = grub
                     .arg("--target=i386-pc")
-                    .arg(self.config.drive().device_path())
+                    .arg(&self.config.partitions().root.device)
                     .spawn()
                     .unwrap()
                     .wait()
@@ -138,7 +148,7 @@ mod private {
             self
         }
 
-        pub fn configure_grub(&mut self) -> &mut Self {
+        pub(crate) fn configure_grub(&mut self) -> &mut Self {
             // TODO: fix grub
             let uuid = self.get_uuid();
             let cmdline = self.grub_cmdline(&uuid);
@@ -165,7 +175,7 @@ mod private {
             self
         }
 
-        pub fn set_mkinitcpio_hooks(&mut self) -> &mut Self {
+        pub(crate) fn set_mkinitcpio_hooks(&mut self) -> &mut Self {
             let mut buffer = String::new();
 
             File::open("/etc/mkinitcpio.conf")
@@ -186,7 +196,7 @@ mod private {
             let mut hooks_target = Vec::from(&hooks_source[0..5]);
             hooks_target.push("keyboard");
 
-            if self.config.drive().encryption() {
+            if self.config.partitions().root.encryption {
                 hooks_target.push("encrypt");
             }
             hooks_target.push("filesystems");
@@ -211,7 +221,7 @@ mod private {
             self
         }
 
-        pub fn add_user(&mut self) -> &mut Self {
+        pub(crate) fn add_user(&mut self) -> &mut Self {
             let user = self.config.system().arch_username();
 
             Command::new("useradd")
@@ -256,7 +266,7 @@ mod private {
             self
         }
 
-        pub fn configure_packages(&mut self) -> &mut Self {
+        pub(crate) fn configure_packages(&mut self) -> &mut Self {
             PackageConfigurator::new(self.config).run();
             self
         }

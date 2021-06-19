@@ -50,6 +50,15 @@ The profile for building a LiveCD
 The path where archiso will be built. By default points to `$BASE_PATH/tmp/live`
 `ARCHISO_WORKING_DIR <PATH>`
 
+## Development
+
+### EFI support for virt-manager
+Open the XML file (typically stored in the `/etc/libvirt/qemu` directory).
+Append the following in the `os` element:
+```xml
+<loader type='rom'>/usr/share/edk2-ovmf/x64/OVMF.fd</loader>
+``` 
+
 ## TODO
 
 - Restart failed or stuck commands
@@ -57,6 +66,8 @@ The path where archiso will be built. By default points to `$BASE_PATH/tmp/live`
 - Add configuration validator
 - Update README.md
 - Fix grub configuration
+
+
 
 ```xml
   <qemu:commandline>
