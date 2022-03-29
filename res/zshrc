@@ -108,7 +108,7 @@ export POWERLEVEL9K_RIGHT_PROMPT_ELEMENTS=(status root_indicator background_jobs
 export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/local/lib"
 export PATH="/home/$USER/.local/bin:$PATH"
 
-ZSH_THEME="powerlevel9k/powerlevel9k"
+ZSH_THEME="powerlevel10k/powerlevel10k"
 
 if [[ "$TERM_PROGRAM" == "vscode" || "$TERM" == "linux" ]]; then
     ZSH_THEME="af-magic"
