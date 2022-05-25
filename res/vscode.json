@@ -9,6 +9,7 @@
         100
     ],
     "window.titleBarStyle": "custom",
+    "editor.fontLigatures": "'ccmp' off",
     "workbench.colorTheme": "SynthWave '84",
     "workbench.colorCustomizations": {
         "editorRuler.foreground": "#FFFFFF20"
