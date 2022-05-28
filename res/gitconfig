@@ -1,7 +1,0 @@
-[user]
-	name = GeorgeAverkin
-	email = nrg3125@gmail.com
-# [credential]
-# 	helper = ssh-askpass
-[core]
-	editor = code
